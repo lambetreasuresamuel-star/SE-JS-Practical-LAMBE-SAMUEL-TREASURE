@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Registration Form</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-image: url('c:/Users/SHALLI/OneDrive/Documents/.vscode/New folder/YO.jpg');
+            background-size:cover;
+            }
+
+        input {
+            display: block;
+            margin: 10px 0;
+            padding: 20px;
+            width: 300px;
+        }
+
+        #error-msg {
+            color: rgb(255, 0, 0);
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        #preview-container {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            width: 320px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Registration Form</h2>
+
+    <!-- Email -->
+    <input type="email" id="email" placeholder="Enter email">
+<button id="check-email-btn">Check Email</button>
+<span id="email-msg"></span><br><br>
+
+<input type="password" id="password" placeholder="Enter password"><br><br>
+
+<input type="password" id="confirm-password" placeholder="Confirm password">
+<span id="error-msg"></span><br><br>
+
+<button id="check-btn">Check Password</button>
+
+<div id="preview-container"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
