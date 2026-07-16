@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Freelance Marketplace — Single File (Copy/Paste)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    /* ---------- Styles (copy/paste) ---------- */
+    :root{
+      --bg:#f6f8fb; --card:#fff; --muted:#6b7280; --accent:#2563eb;
+      --success:#16a34a; --danger:#dc2626; --glass: rgba(255,255,255,0.6);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#eef2ff 0%,var(--bg) 100%);}
+    .wrap{max-width:1100px;margin:28px auto;padding:20px;display:grid;grid-template-columns:320px 1fr;gap:20px;}
+    .panel{background:var(--card);border-radius:10px;padding:16px;box-shadow:0 6px 18px rgba(16,24,40,0.06);}
+    header.app{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:12px 18px;margin-bottom:6px;}
+    header.app h1{font-size:18px;margin:0;color:#0f172a;}
+    .nav a{margin-left:10px;color:var(--accent);text-decoration:none;font-weight:600}
+    .small{font-size:13px;color:var(--muted)}
+    .muted{color:var(--muted)}
+    /* auth */
+    .form-row{margin-bottom:10px}
+    input,textarea,select{width:100%;padding:10px;border:1px solid #e6e9ef;border-radius:8px;font-size:14px;box-sizing:border-box}
+    button{background:var(--accent);color:#fff;border:0;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(37,99,235,0.12)}
+    .jobs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+    .job{border:1px solid #eef2ff;padding:12px;border-radius:8px;background:linear-gradient(180deg,#fff,#fbfdff)}
+    .job h3{margin:0 0 6px 0;font-size:16px}
+    .job p{margin:6px 0;color:var(--muted);font-size:13px}
+    .row{display:flex;gap:8px;align-items:center}
+    .tag{background:#eef2ff;color:var(--accent);padding:6px 8px;border-radius:999px;font-size:12px}
+    .right{margin-left:auto}
+    .notice{padding:10px;border-radius:8px;background:#fff8e6;border:1px solid #ffedd5;color:#92400e}
+    footer{grid-column:1/-1;text-align:center;color:var(--muted);font-size:13px;margin-top:18px}
+    /* responsive */
+    @media (max-width:880px){.wrap{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+  <!--
+    Single-file Freelance Marketplace (frontend-only)
+    - Copy/paste this entire file into a new .html and open in browser.
+    - Uses localStorage as a simple "backend" (no server required).
+    - Features: register/login, create job (client), list jobs, apply (freelancer),
+      view applications (client), simple in-memory "payments" simulation.
+    - This is a minimal, self-contained starter for local testing and prototyping.
+  -->
+  <div class="wrap">
+    <header class="app panel">
+      <h1>Freelance Marketplace (single file)</h1>
+      <div class="nav">
+        <span id="who" class="small muted">Not signed in</span>
+        <a href="#" id="nav-dashboard">Dashboard</a>
+        <a href="#" id="nav-create">Create Job</a>
+        <a href="#" id="nav-login">Login</a>
+        <a href="#" id="nav-register">Register</a>
+        <a href="#" id="nav-logout" style="display:none;color:#ef4444">Logout</a>
+      </div>
+    </header>
+
+    <!-- left column: forms / user panel -->
+    <aside id="left" class="panel">
+      <div id="auth-area">
+        <!-- dynamic: login/register/profile -->
+      </div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid #f1f5f9" />
+
+      <div class="panel" style="padding:12px;margin-top:8px">
+        <h4 style="margin:0 0 8px 0">Quick actions</h4>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button id="btn-sample" class="ghost">Load sample data</button>
+          <button id="btn-clear" class="ghost" style="color:var(--danger);border-color:rgba(220,38,38,0.08)">Clear all data</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- main column: content -->
+    <main id="main" class="panel">
+      <!-- dynamic content injected here -->
+    </main>
+
+    <footer>
+      Built for prototyping — data stored locally in your browser (localStorage).
+    </footer>
+  </div>
+
+  <script>
+    /* ---------- JavaScript (copy/paste) ---------- */
+    (function(){
+      // Simple single-file app using localStorage as persistence.
+      // Data model:
+      // users: [{id,name,email,password,role,bio,hourlyRate}]
+      // jobs: [{id,title,description,budget,clientId,status,createdAt}]
+      // applications: [{id,jobId,freelancerId,coverLetter,proposedRate,status,createdAt}]
+      // currentUserId: string
+
+      // Utilities
+      const $ = sel => document.querySelector(sel);
+      const uid = (n=8)=>Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,n+2);
+      const now = ()=>new Date().toISOString();
+      const storage = {
+        get(k){ try { return JSON.parse(localStorage.getItem(k)||'null'); } catch(e){ return null; } },
+        set(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+      };
+
+      // Initialize storage if missing
+      function ensure() {
+        if (!storage.get('users')) storage.set('users', []);
+        if (!storage.get('jobs')) storage.set('jobs', []);
+        if (!storage.get('applications')) storage.set('applications', []);
+        if (!storage.get('currentUserId')) storage.set('currentUserId', null);
+      }
+
+      // Auth helpers
+      function currentUser(){ const id = storage.get('currentUserId'); if(!id) return null; return storage.get('users').find(u=>u.id===id) || null; }
+      function setCurrentUser(id){ storage.set('currentUserId', id); renderNav(); renderAuthArea(); routeTo('dashboard'); }
+
+      // Basic "hash" for password (not secure; for prototyping only)
+      function simpleHash(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h<<5)-h + s.charCodeAt(i); h |= 0; } return 'h'+Math.abs(h); }
+
+      // CRUD operations
+      function createUser({name,email,password,role,bio,hourlyRate}){
+        const users = storage.get('users')||[];
+        if(users.find(u=>u.email.toLowerCase()===email.toLowerCase())) throw new Error('Email already registered');
+        const u = { id: uid(6), name, email, passwordHash: simpleHash(password), role: role||'freelancer', bio: bio||'', hourlyRate: hourlyRate||null, createdAt: now() };
+        users.push(u); storage.set('users', users); return u;
+      }
+      function loginUser({email,password}){
+        const users = storage.get('users')||[];
+        const u = users.find(x=>x.email.toLowerCase()===email.toLowerCase());
+        if(!u) throw new Error('No account with that email');
+        if(u.passwordHash !== simpleHash(password)) throw new Error('Invalid password');
+        return u;
+      }
+      function createJob({title,description,budget,clientId}){
+        const jobs = storage.get('jobs')||[];
+        const j = { id: uid(6), title, description, budget: budget||null, clientId, status:'open', createdAt: now() };
+        jobs.push(j); storage.set('jobs', jobs); return j;
+      }
+      function listJobs(){ return (storage.get('jobs')||[]).slice().reverse(); }
+      function getJob(id){ return (storage.get('jobs')||[]).find(j=>j.id===id) || null; }
+      function createApplication({jobId,freelancerId,coverLetter,proposedRate}){
+        const applications = storage.get('applications')||[];
+        // prevent duplicate application by same freelancer
+        if(applications.find(a=>a.jobId===jobId && a.freelancerId===freelancerId)) throw new Error('You already applied to this job');
+        const a = { id: uid(6), jobId, freelancerId, coverLetter: coverLetter||'', proposedRate: proposedRate||null, status:'pending', createdAt: now() };
+        applications.push(a); storage.set('applications', applications); return a;
+      }
+      function listApplicationsForJob(jobId){ return (storage.get('applications')||[]).filter(a=>a.jobId===jobId); }
+      function acceptApplication(appId, clientId){
+        const apps = storage.get('applications')||[];
+        const app = apps.find(a=>a.id===appId); if(!app) throw new Error('Application not found');
+        const job = getJob(app.jobId); if(!job) throw new Error('Job not found');
+        if(job.clientId !== clientId) throw new Error('Only the job owner can accept');
+        // mark accepted, set job in_progress
+        app.status = 'accepted';
+        job.status = 'in_progress';
+        storage.set('applications', apps);
+        const jobs = storage.get('jobs'); storage.set('jobs', jobs.map(j=>j.id===job.id?job:j));
+        return app;
+      }
+
+      // UI rendering
+      function renderNav(){
+        const user = currentUser();
+        $('#who').textContent = user ? `${user.name} (${user.role})` : 'Not signed in';
+        $('#nav-login').style.display = user ? 'none' : '';
+        $('#nav-register').style.display = user ? 'none' : '';
+        $('#nav-create').style.display = user ? '' : 'none';
+        $('#nav-logout').style.display = user ? '' : 'none';
+      }
+
+      function renderAuthArea(){
+        const area = $('#auth-area'); area.innerHTML = '';
+        const user = currentUser();
+        if(!user){
+          // show login quick form
+          area.innerHTML = `
+            <h3 style="margin-top:0">Welcome</h3>
+            <div class="small muted">Sign in or register to post jobs or apply.</div>
+            <div style="margin-top:12px">
+              <div class="form-row"><input id="quick-email" placeholder="Email" /></div>
+              <div class="form-row"><input id="quick-pass" placeholder="Password" type="password" /></div>
+              <div style="display:flex;gap:8px">
+                <button id="quick-login">Login</button>
+                <button id="quick-register" class="ghost">Register</button>
+              </div>
+            </div>
+          `;
+          $('#quick-login').onclick = async ()=>{
+            try{
+              const email = $('#quick-email').value.trim();
+              const password = $('#quick-pass').value;
+              const u = loginUser({email,password});
+              setCurrentUser(u.id);
+              toast('Signed in');
+            }catch(e){ toast(e.message,'error'); }
+          };
+          $('#quick-register').onclick = ()=> routeTo('register');
+        } else {
+          // show profile
+          area.innerHTML = `
+            <h3 style="margin-top:0">${user.name}</h3>
+            <div class="small muted">${user.email}</div>
+            <div style="margin-top:8px">
+              <div class="small">Role: <strong>${user.role}</strong></div>
+              <div class="small">Bio: ${user.bio || '—'}</div>
+              <div class="small">Hourly: ${user.hourlyRate ? '$'+user.hourlyRate : '—'}</div>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button id="btn-edit">Edit</button>
+              <button id="btn-logout" class="ghost" style="color:var(--danger)">Sign out</button>
+            </div>
+          `;
+          $('#btn-logout').onclick = ()=>{ storage.set('currentUserId', null); renderNav(); renderAuthArea(); routeTo('dashboard'); toast('Signed out'); };
+          $('#btn-edit').onclick = ()=> routeTo('profile');
+        }
+      }
+
+      function renderMainDashboard(){
+        const main = $('#main'); main.innerHTML = '';
+        const jobs = listJobs();
+        main.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;justify-content:space-between">
+            <div>
+              <h2 style="margin:0">Jobs</h2>
+              <div class="small muted">Browse open jobs and apply if you're a freelancer.</div>
+            </div>
+            <div class="small muted">Total: ${jobs.length}</div>
+          </div>
+          <div style="margin-top:12px" id="jobs-wrap"></div>
+        `;
+        const wrap = document.getElementById('jobs-wrap');
+        if(jobs.length===0){
+          wrap.innerHTML = `<div class="notice">No jobs yet. Clients can create jobs using Create Job.</div>`;
+          return;
+        }
+        const grid = document.createElement('div'); grid.className='jobs-grid';
+        jobs.forEach(j=>{
+          const client = (storage.get('users')||[]).find(u=>u.id===j.clientId);
+          const el = document.createElement('div'); el.className='job';
+          el.innerHTML = `
+            <div class="row"><span class="tag">${j.status}</span><div class="right small muted">${new Date(j.createdAt).toLocaleString()}</div></div>
+            <h3>${escapeHtml(j.title)}</h3>
+            <p>${escapeHtml(j.description)}</p>
+            <div class="row" style="margin-top:8px">
+              <div class="small muted">Budget: ${j.budget ? '$'+j.budget : 'TBD'}</div>
+              <div class="right small muted">Posted by ${client ? escapeHtml(client.name) : 'Unknown'}</div>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:8px">
+              <button data-action="view" data-id="${j.id}">View</button>
+              <button data-action="apply" data-id="${j.id}" class="ghost">Apply</button>
+            </div>
+          `;
+          grid.appendChild(el);
+        });
+        wrap.appendChild(grid);
+
+        // attach handlers
+        grid.querySelectorAll('button').forEach(btn=>{
+          btn.addEventListener('click', async (e)=>{
+            const id = btn.dataset.id;
+            const action = btn.dataset.action;
+            if(action==='view') return routeTo('job', id);
+            if(action==='apply') return routeTo('apply', id);
+          });
+        });
+      }
+
+      function renderCreateJob(){
+        const user = currentUser();
+        if(!user || user.role !== 'client'){
+          $('#main').innerHTML = `<div class="notice">Only signed-in clients can create jobs. Switch to a client account or register as a client.</div>`;
+          return;
+        }
+        $('#main').innerHTML = `
+          <h2>Create Job</h2>
+          <form id="job-form">
+            <div class="form-row"><input id="job-title" placeholder="Title" required /></div>
+            <div class="form-row"><textarea id="job-desc" placeholder="Description" rows="6" required></textarea></div>
+            <div class="form-row"><input id="job-budget" placeholder="Budget (USD)" type="number" /></div>
+            <div style="display:flex;gap:8px"><button type="submit">Create Job</button><button id="cancel-create" type="button" class="ghost">Cancel</button></div>
+          </form>
+        `;
+        $('#cancel-create').onclick = ()=> routeTo('dashboard');
+        $('#job-form').onsubmit = (ev)=>{
+          ev.preventDefault();
+          try{
+            const title = $('#job-title').value.trim();
+            const description = $('#job-desc').value.trim();
+            const budget = Number($('#job-budget').value) || null;
+            createJob({title,description,budget,clientId:user.id});
+            toast('Job created');
+            routeTo('dashboard');
+          }catch(e){ toast(e.message,'error'); }
+        };
+      }
+
+      function renderRegister(){
+        $('#main').innerHTML = `
+          <h2>Register</h2>
+          <form id="reg-form">
+            <div class="form-row"><input id="reg-name" placeholder="Full name" required /></div>
+            <div class="form-row"><input id="reg-email" placeholder="Email" required /></div>
+            <div class="form-row"><input id="reg-pass" placeholder="Password" type="password" required /></div>
+            <div class="form-row">
+              <select id="reg-role">
+                <option value="freelancer">Freelancer</option>
+                <option value="client">Client</option>
+              </select>
+            </div>
+            <div class="form-row"><input id="reg-hourly" placeholder="Hourly rate (optional)" type="number" /></div>
+            <div class="form-row"><textarea id="reg-bio" placeholder="Short bio (optional)"></textarea></div>
+            <div style="display:flex;gap:8px"><button>Create account</button><button id="cancel-reg" type="button" class="ghost">Cancel</button></div>
+          </form>
+        `;
+        $('#cancel-reg').onclick = ()=> routeTo('dashboard');
+        $('#reg-form').onsubmit = (ev)=>{
+          ev.preventDefault();
+          try{
+            const name = $('#reg-name').value.trim();
+            const email = $('#reg-email').value.trim();
+            const password = $('#reg-pass').value;
+            const role = $('#reg-role').value;
+            const hourlyRate = $('#reg-hourly').value ? Number($('#reg-hourly').value) : null;
+            const bio = $('#reg-bio').value.trim();
+            const u = createUser({name,email,password,role,bio,hourlyRate});
+            setCurrentUser(u.id);
+            toast('Account created and signed in');
+          }catch(e){ toast(e.message,'error'); }
+        };
+      }
+
+      function renderLogin(){
+        $('#main').innerHTML = `
+          <h2>Login</h2>
+          <form id="login-form">
+            <div class="form-row"><input id="login-email" placeholder="Email" required /></div>
+            <div class="form-row"><input id="login-pass" placeholder="Password" type="password" required /></div>
+            <div style="display:flex;gap:8px"><button>Sign in</button><button id="cancel-login" type="button" class="ghost">Cancel</button></div>
+          </form>
+        `;
+        $('#cancel-login').onclick = ()=> routeTo('dashboard');
+        $('#login-form').onsubmit = (ev)=>{
+          ev.preventDefault();
+          try{
+            const email = $('#login-email').value.trim();
+            const password = $('#login-pass').value;
+            const u = loginUser({email,password});
+            setCurrentUser(u.id);
+            toast('Signed in');
+          }catch(e){ toast(e.message,'error'); }
+        };
+      }
+
+      function renderJobView(jobId){
+        const job = getJob(jobId);
+        if(!job) { $('#main').innerHTML = `<div class="notice">Job not found</div>`; return; }
+        const client = (storage.get('users')||[]).find(u=>u.id===job.clientId);
+        const apps = listApplicationsForJob(jobId);
+        const user = currentUser();
+        let actionsHtml = '';
+        if(user && user.role==='freelancer'){
+          actionsHtml = `<div style="margin-top:12px"><button id="btn-apply-now">Apply to this job</button></div>`;
+        } else if(user && user.role==='client' && user.id===job.clientId){
+          actionsHtml = `<div style="margin-top:12px"><button id="btn-view-apps" class="ghost">View applications (${apps.length})</button></div>`;
+        } else {
+          actionsHtml = `<div style="margin-top:12px" class="small muted">Sign in to apply or view applications.</div>`;
+        }
+        $('#main').innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><h2 style="margin:0">${escapeHtml(job.title)}</h2><div class="small muted">Posted by ${client ? escapeHtml(client.name) : 'Unknown'}</div></div>
+            <div class="tag">${job.status}</div>
+          </div>
+          <div style="margin-top:12px">
+            <p>${escapeHtml(job.description)}</p>
+            <div class="small muted">Budget: ${job.budget ? '$'+job.budget : 'TBD'}</div>
+            ${actionsHtml}
+          </div>
+        `;
+        if($('#btn-apply-now')) $('#btn-apply-now').onclick = ()=> routeTo('apply', jobId);
+        if($('#btn-view-apps')) $('#btn-view-apps').onclick = ()=> routeTo('applications', jobId);
+      }
+
+      function renderApply(jobId){
+        const user = currentUser();
+        if(!user || user.role!=='freelancer'){ $('#main').innerHTML = `<div class="notice">Only signed-in freelancers can apply. Please sign in or register as a freelancer.</div>`; return; }
+        const job = getJob(jobId);
+        if(!job){ $('#main').innerHTML = `<div class="notice">Job not found</div>`; return; }
+        $('#main').innerHTML = `
+          <h2>Apply to: ${escapeHtml(job.title)}</h2>
+          <form id="apply-form">
+            <div class="form-row"><textarea id="apply-cover" placeholder="Cover letter (why you're a fit)" rows="6"></textarea></div>
+            <div class="form-row"><input id="apply-rate" placeholder="Proposed rate (USD)" type="number" /></div>
+            <div style="display:flex;gap:8px"><button>Send application</button><button id="cancel-apply" type="button" class="ghost">Cancel</button></div>
+          </form>
+        `;
+        $('#cancel-apply').onclick = ()=> routeTo('job', jobId);
+        $('#apply-form').onsubmit = (ev)=>{
+          ev.preventDefault();
+          try{
+            const cover = $('#apply-cover').value.trim();
+            const rate = $('#apply-rate').value ? Number($('#apply-rate').value) : null;
+            createApplication({jobId,freelancerId:user.id,coverLetter:cover,proposedRate:rate});
+            toast('Application submitted');
+            routeTo('job', jobId);
+          }catch(e){ toast(e.message,'error'); }
+        };
+      }
+
+      function renderApplications(jobId){
+        const user = currentUser();
+        const job = getJob(jobId);
+        if(!job) { $('#main').innerHTML = `<div class="notice">Job not found</div>`; return; }
+        if(!user || user.id !== job.clientId){ $('#main').innerHTML = `<div class="notice">Only the job owner can view applications.</div>`; return; }
+        const apps = listApplicationsForJob(jobId);
+        $('#main').innerHTML = `
+          <h2>Applications for: ${escapeHtml(job.title)}</h2>
+          <div style="margin-top:12px" id="apps-wrap"></div>
+        `;
+        const wrap = $('#apps-wrap');
+        if(apps.length===0){ wrap.innerHTML = `<div class="notice">No applications yet.</div>`; return; }
+        apps.forEach(a=>{
+          const freelancer = (storage.get('users')||[]).find(u=>u.id===a.freelancerId);
+          const el = document.createElement('div'); el.className='panel'; el.style.marginBottom='8px';
+          el.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <strong>${freelancer ? escapeHtml(freelancer.name) : 'Unknown'}</strong>
+                <div class="small muted">${freelancer ? escapeHtml(freelancer.email) : ''}</div>
+              </div>
+              <div class="small muted">${new Date(a.createdAt).toLocaleString()}</div>
+            </div>
+            <p style="margin-top:8px">${escapeHtml(a.coverLetter || '—')}</p>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="small muted">Proposed: ${a.proposedRate ? '$'+a.proposedRate : '—'}</div>
+              <div class="right">
+                <button data-action="accept" data-id="${a.id}">Accept</button>
+                <button data-action="reject" data-id="${a.id}" class="ghost">Reject</button>
+              </div>
+            </div>
+          `;
+          wrap.appendChild(el);
+        });
+        wrap.querySelectorAll('button').forEach(b=>{
+          b.onclick = ()=>{
+            const id = b.dataset.id;
+            const action = b.dataset.action;
+            if(action==='accept'){
+              try{
+                acceptApplication(id, user.id);
+                toast('Application accepted — job in progress');
+                routeTo('applications', jobId);
+              }catch(e){ toast(e.message,'error'); }
+            } else if(action==='reject'){
+              // simple reject: mark application rejected
+              const apps = storage.get('applications')||[];
+              const app = apps.find(x=>x.id===id);
+              if(app){ app.status='rejected'; storage.set('applications', apps); toast('Application rejected'); routeTo('applications', jobId); }
+            }
+          };
+        });
+      }
+
+      function renderProfileEdit(){
+        const user = currentUser();
+        if(!user){ routeTo('dashboard'); return; }
+        $('#main').innerHTML = `
+          <h2>Edit profile</h2>
+          <form id="profile-form">
+            <div class="form-row"><input id="p-name" value="${escapeHtml(user.name)}" /></div>
+            <div class="form-row"><input id="p-email" value="${escapeHtml(user.email)}" disabled /></div>
+            <div class="form-row"><input id="p-hourly" type="number" value="${user.hourlyRate||''}" /></div>
+            <div class="form-row"><textarea id="p-bio">${escapeHtml(user.bio||'')}</textarea></div>
+            <div style="display:flex;gap:8px"><button>Save</button><button id="cancel-profile" type="button" class="ghost">Cancel</button></div>
+          </form>
+        `;
+        $('#cancel-profile').onclick = ()=> routeTo('dashboard');
+        $('#profile-form').onsubmit = (ev)=>{
+          ev.preventDefault();
+          const users = storage.get('users')||[];
+          const u = users.find(x=>x.id===user.id);
+          u.name = $('#p-name').value.trim();
+          u.hourlyRate = $('#p-hourly').value ? Number($('#p-hourly').value) : null;
+          u.bio = $('#p-bio').value.trim();
+          storage.set('users', users);
+          toast('Profile updated');
+          renderAuthArea();
+          routeTo('dashboard');
+        };
+      }
+
+      // Router
+      function routeTo(page, id){
+        // pages: dashboard, create, login, register, job:id, apply:id, applications:id, profile
+        renderNav();
+        renderAuthArea();
+        if(page==='dashboard' || !page) return renderMainDashboard();
+        if(page==='create') return renderCreateJob();
+        if(page==='login') return renderLogin();
+        if(page==='register') return renderRegister();
+        if(page==='job') return renderJobView(id);
+        if(page==='apply') return renderApply(id);
+        if(page==='applications') return renderApplications(id);
+        if(page==='profile') return renderProfileEdit();
+      }
+
+      // small helpers
+      function escapeHtml(s){ if(!s && s!==0) return ''; return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]); }
+      function toast(msg, type='ok'){ const el = document.createElement('div'); el.textContent = msg; el.style.position='fixed'; el.style.right='18px'; el.style.bottom='18px'; el.style.padding='10px 14px'; el.style.borderRadius='8px'; el.style.boxShadow='0 8px 24px rgba(2,6,23,0.12)'; el.style.zIndex=9999; el.style.color='#fff'; el.style.fontWeight=600; el.style.background = type==='error' ? 'linear-gradient(90deg,#ef4444,#dc2626)' : 'linear-gradient(90deg,#10b981,#059669)'; document.body.appendChild(el); setTimeout(()=>el.style.opacity='0',2200); setTimeout(()=>el.remove(),2600); }
+
+      // sample data
+      function loadSample(){
+        storage.set('users', [
+          { id:'u-client', name:'Acme Corp', email:'client@acme.test', passwordHash:simpleHash('client123'), role:'client', bio:'We hire top talent', hourlyRate:null, createdAt:now() },
+          { id:'u-freel', name:'Jane Doe', email:'jane@freel.test', passwordHash:simpleHash('freel123'), role:'freelancer', bio:'Full-stack dev', hourlyRate:45, createdAt:now() }
+        ]);
+        storage.set('jobs', [
+          { id:'job-1', title:'Build landing page', description:'Need a responsive landing page with signup form and analytics.', budget:500, clientId:'u-client', status:'open', createdAt:now() },
+          { id:'job-2', title:'API integration', description:'Integrate payment gateway and webhook handling.', budget:1200, clientId:'u-client', status:'open', createdAt:now() }
+        ]);
+        storage.set('applications', []);
+        storage.set('currentUserId', null);
+        renderNav(); renderAuthArea(); routeTo('dashboard'); toast('Sample data loaded');
+      }
+
+      // clear all
+      function clearAll(){
+        if(!confirm('Clear all local data? This cannot be undone.')) return;
+        localStorage.removeItem('users'); localStorage.removeItem('jobs'); localStorage.removeItem('applications'); localStorage.removeItem('currentUserId');
+        ensure(); renderNav(); renderAuthArea(); routeTo('dashboard'); toast('All data cleared');
+      }
+
+      // wire nav links
+      $('#nav-dashboard').onclick = (e)=>{ e.preventDefault(); routeTo('dashboard'); };
+      $('#nav-create').onclick = (e)=>{ e.preventDefault(); routeTo('create'); };
+      $('#nav-login').onclick = (e)=>{ e.preventDefault(); routeTo('login'); };
+      $('#nav-register').onclick = (e)=>{ e.preventDefault(); routeTo('register'); };
+      $('#nav-logout').onclick = (e)=>{ e.preventDefault(); storage.set('currentUserId', null); renderNav(); renderAuthArea(); routeTo('dashboard'); toast('Signed out'); };
+
+      // left panel buttons
+      $('#btn-sample').onclick = loadSample;
+      $('#btn-clear').onclick = clearAll;
+
+      // initial boot
+      ensure();
+      renderNav();
+      renderAuthArea();
+      routeTo('dashboard');
+
+      // deep linking via hash (optional)
+      window.addEventListener('hashchange', ()=>{
+        const h = location.hash.slice(1);
+        if(!h) return routeTo('dashboard');
+        const parts = h.split('/');
+        if(parts[0]==='job' && parts[1]) return routeTo('job', parts[1]);
+      });
+
+      // expose for debugging (optional)
+      window.__APP = { storage, createUser, loginUser, createJob, listJobs, createApplication, currentUser };
+
+    })();
+  </script>
+</body>
+</html>
